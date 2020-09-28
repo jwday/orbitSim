@@ -35,11 +35,11 @@ from matplotlib.animation import FuncAnimation
 import time
 import decimal
 from decimal import Decimal as D
-import datetime
 from decimal_pi import pi as dec_pi
-from atm_model_exp import nasa_eam
+from atm_model_exp import nasa_eam_model, msise00_model
 from mpmath import *
 import pandas as pd
+from datetime import datetime, timedelta
 
 # =============================================================================
 # Specify constants and simulation parameters
@@ -66,10 +66,11 @@ import pandas as pd
 #	ifactor=6.0
 
 
-def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, **kwargs):
+def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, start_time, **kwargs):
 	drag_on = kwargs["drag_on"]
 	circular_orbit = kwargs["circular_orbit"]
 	error_testing = kwargs["error_testing"]
+	sim_time = start_time
 	
 	if error_testing:
 		circular_orbit=False
@@ -82,7 +83,7 @@ def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, **kwargs):
 	print("")
 	print("")
 	if not error_testing:
-		print("Deorbiting a " + str(int(mass_sat)) + "kg cubesat of ref. area " + str(int(A_ref*10000)) + " cm^2")
+		print("Deorbiting a " + str(int(mass_sat)) + "kg cubesat of ref. area " + str(int(A_ref*10000)) + " cm^2 (" + str(int(t_step)) + " sec time step)")
 	else:
 		print("Error testing over " + str(num_orbits) + " orbits")
 
@@ -94,8 +95,8 @@ def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, **kwargs):
 	decimal.getcontext().prec=8
 
 	integrator = 'dopri5'
-	rtol=10**-6
-	atol=10**-12
+	rtol=10**-3
+	atol=10**-6
 	nsteps=1000
 
 	dt = t_step  # Time step (seconds)
@@ -109,11 +110,11 @@ def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, **kwargs):
 
 	# ISS_alt = D(408)*1000  # Kilometers
 
-	r_earth = D(np.average([6378137, 6356752]))  	# Radius of Earth, m
+	r_earth = D(6378100)  	# Radius of Earth, m
 	G = D(6.67*10**-11)  							# Gravitational constant
 	mass_earth = D(5.972*10**24)  					# Earth mass, kg
-	mu = G*mass_earth  								# Specific gravitational constant of Earth
-
+	# mu = G*mass_earth  								# Specific gravitational constant of Earth
+	mu = D(3.986*10**14)
 
 
 
@@ -171,10 +172,10 @@ def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, **kwargs):
 	    # Returns a 1x4 array of x_dots, aka the derivates of the EOMs above
 	    x_dot = np.zeros(4)  # Pre-make the array
 
-	    x_dot[0] = D(x[1])  															# r'
-	    x_dot[1] = D(x[0])*D(x[3])**2 - mu/D(x[0])**2  									# r''
-	    x_dot[2] = D(x[3])  															# th'
-	    x_dot[3] = -2*D(x[1])*D(x[3])/D(x[0]) + drag(x[0], x[3], mass_sat)/D(x[0])  	# th''
+	    x_dot[0] = D(x[1])  																	# r'
+	    x_dot[1] = D(x[0])*D(x[3])**2 - mu/D(x[0])**2  											# r''
+	    x_dot[2] = D(x[3])  																	# th'
+	    x_dot[3] = -2*D(x[1])*D(x[3])/D(x[0]) + drag(x[0], x[3], mass_sat, sim_time)/D(x[0])  	# th''
 	  
 	    x_dots = np.array([x_dot[0], x_dot[1], x_dot[2], x_dot[3]])
 	    
@@ -187,10 +188,11 @@ def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, **kwargs):
 	# Drag Function
 	# =============================================================================
 
-	def drag(alt, ang_vel, mass_sat):
+	def drag(alt, ang_vel, mass_sat, sim_time):
 		if drag_on and not error_testing:
 			vel = D(alt)*(D(ang_vel) - D(7.2921159*10**-5))  	# Takes into account the angular velocity of the Earth
-			rho = nasa_eam(D(alt) - r_earth)[2]					# Density is calculated by passing altitude to this function
+			# rho = nasa_eam_model(D(alt) - r_earth)[2]					# Density is calculated by passing altitude to this function
+			rho = msise00_model((D(alt) - r_earth), sim_time)[2]		
 			drag_force = D(0.5)*D(C_D)*D(A_ref)*rho*vel**2		# Drag force
 			a_T = -drag_force/D(mass_sat)						# Tengential acceleration from F = ma
 
@@ -246,7 +248,7 @@ def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, **kwargs):
 		return t, x
 
 
-	N = 0
+	N = 0		# Number of full orbits
 	N_prev = 0
 	orbit = [0]
 
@@ -259,6 +261,7 @@ def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, **kwargs):
 	while r.successful():
 		r.integrate(D(r.t)+D(dt))
 		th_home = 2*np.pi*N
+		sim_time += timedelta(seconds=dt)
 
 		# Log the number of full orbits made
 		if (float(r.y[2]) - th_home) >= 2*np.pi:  
@@ -303,7 +306,7 @@ def orbit(h_perigee, v_perigee, C_D, A_ref, mass_sat, t_step, **kwargs):
 	states = np.array(x)  		# Convert states list to array
 
 	if not error_testing:
-		return(times, altitude)
+		return(times, altitude, states)
 	else:
 		plot_error(orbit, estimated_periapsis, num_orbits, r_perigee, t_step, integrator, atol, rtol)
 

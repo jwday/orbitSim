@@ -32,7 +32,7 @@ print()
 
 # z_target = [15, 30, 45, 60]  # Target point distance from target spacecraft CoM
 z_target = np.arange(0, 61, 0.1)		# Target position
-d = np.arange(0, 5, 0.01)				# Stray distances
+d = np.arange(0, 15, 0.01)				# Stray distances
 Z, D = np.meshgrid(z_target, d)
 colors = ['r', 'y', 'g', 'b']
 
@@ -54,28 +54,31 @@ for i in z_target:
 	dv_req[target_dist_str] = dv
 	tof_between_burns[target_dist_str] = 2*t_to_min
 
-dv_tot = dv_req/(tof_between_burns/5520)
+dv_tot = dv_req/(tof_between_burns/5557.2)
 
 
 fig1, (ax1, ax2, ax3) = plt.subplots(3, 1, sharex=True, sharey=True, dpi=300, figsize=(7.5, 5.5))
 cs = ax1.contourf(Z, D, dv_req, levels=11, cmap=cm.Blues)
-ax1.set_title('\u0394V Required to Stay Within Allowable Stray Distance (m/s)')
+ax1.set_title('Single-Burn \u0394V Required to Stay Within Allowable Stray Distance (m/s)', fontsize=10)
 cbar = fig1.colorbar(cs, ax=ax1)
+# plt.gca().set_aspect('equal')
 
 cs = ax2.contourf(Z, D, tof_between_burns, levels=11, cmap=cm.Oranges)
-ax2.set_title('Time Between Required Burns (sec)')
+ax2.set_title('Time Between Required Burns (sec)', fontsize=10)
 cbar = fig1.colorbar(cs, ax=ax2)
+# plt.gca().set_aspect('equal')
 
 cs = ax3.contourf(Z, D, dv_tot, levels=11, cmap=cm.Greens)
-ax3.set_title('\u0394V Required per Orbit (m/s)')
+ax3.set_title('\u0394V Required per Orbit (m/s)', fontsize=10)
 cbar = fig1.colorbar(cs, ax=ax3)
+# plt.gca().set_aspect('equal')
 
 # Create a big, empty subplot and label the axes on it instead of the individual subplots
 # fig1.suptitle('Target Out-of-Plane Distance and Allowable Stray Distance')
 fig1.add_subplot(111, frameon=False)
 plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-plt.xlabel('Inspection Target Out-of-Plane Distance (m)', x=0.4)
-plt.ylabel('Allowable Stray Distance from Target (m)')
+plt.xlabel(r'Distance from ISS C.M., in $z$-direction (m)', x=0.4, fontsize=12)
+plt.ylabel('Allowable Stray Distance from Inspection Target (m)', fontsize=12)
 
 fig1.tight_layout(h_pad=1.0)
 # plt.subplots_adjust(hspace=0.4)
